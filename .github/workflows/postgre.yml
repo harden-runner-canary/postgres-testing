@@ -6,7 +6,7 @@ jobs:
   # Label of the runner jobb
   runner-job:
     # You must use a Linux environment when using service containers or container job
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     # Service containers to run with `runner-job`
     services:
@@ -62,7 +62,7 @@ jobs:
 
   runner-job-arm:
     # You must use a Linux environment when using service containers or container job
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
 
     # Service containers to run with `runner-job`
     services:
