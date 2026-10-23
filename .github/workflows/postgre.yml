@@ -59,6 +59,12 @@ jobs:
           POSTGRES_HOST: localhost
           # The default PostgreSQL port
           POSTGRES_PORT: 5432
+      - run: |
+          resolvectl status
+          ls -la /etc/systemd/resolved.conf.d/ /run/systemd/resolved.conf.d/ 2>&1
+          cat /etc/resolv.conf
+          ss -lunp | grep ':53'
+          getent hosts github.com
 
   runner-job-arm:
     # You must use a Linux environment when using service containers or container job
@@ -115,4 +121,11 @@ jobs:
           POSTGRES_HOST: localhost
           # The default PostgreSQL port
           POSTGRES_PORT: 5432
+
+      - run: |
+          resolvectl status
+          ls -la /etc/systemd/resolved.conf.d/ /run/systemd/resolved.conf.d/ 2>&1
+          cat /etc/resolv.conf
+          ss -lunp | grep ':53'
+          getent hosts github.com
 
