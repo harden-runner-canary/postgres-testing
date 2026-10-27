@@ -1,0 +1,80 @@
+name: GitHub DNS experiment revert test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} (sample ${{ matrix.sample }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-26.04]
+        sample: [1, 2, 3, 4, 5]
+    steps:
+      - name: Harden Runner
+        uses: h0x0er/harden-runner@gh-dns-test
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            codeload.github.com:443
+            proxy.golang.org:443
+            registry.npmjs.org:443
+
+      - name: Experiment indicators (after hardening)
+        run: |
+          ls -l /etc/resolv.conf
+          cat /etc/resolv.conf
+          for f in /etc/systemd/resolved.conf.d/90-egress-proxy.conf /run/systemd/resolved.conf.d/90-egress-proxy.conf; do
+            if [ -e "$f" ]; then echo "PRESENT: $f"; else echo "absent: $f"; fi
+          done
+          for u in egress-dns-resolver.service egress-outbound-proxy.service; do
+            echo "$u: $(systemctl is-active "$u" || true)"
+          done
+          ls -l /opt/hca 2>/dev/null || echo "/opt/hca absent"
+          sudo systemd-analyze cat-config systemd/resolved.conf | grep -E '^\s*(DNS|Domains)=' || true
+
+      - name: Agent revert log
+        run: |
+          sudo grep -h 'github-dns-experiment' /home/agent/agent.log \
+            || echo "no github-dns-experiment log lines (flag off or agent did not run the check)"
+
+      - name: Checkout (github.com)
+        uses: actions/checkout@v4
+
+      - name: Probe allowed and blocked endpoints
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          fail=0
+          for round in 1 2; do
+            echo "=== round $round ==="
+            for host in github.com api.github.com proxy.golang.org registry.npmjs.org; do
+              for i in 1 2 3; do
+                if curl -sS -o /dev/null --max-time 10 "https://$host"; then
+                  echo "PASS $host attempt $i"
+                else
+                  echo "FAIL $host attempt $i"; fail=1
+                fi
+              done
+            done
+            if gh api /rate_limit --jq '.rate.remaining' >/dev/null; then
+              echo "PASS gh api"
+            else
+              echo "FAIL gh api"; fail=1
+            fi
+            if curl -sS -o /dev/null --max-time 10 https://example.com; then
+              echo "FAIL example.com was reachable"; fail=1
+            else
+              echo "PASS example.com blocked"
+            fi
+            [ "$round" = 1 ] && sleep 30
+          done
+          exit $fail
